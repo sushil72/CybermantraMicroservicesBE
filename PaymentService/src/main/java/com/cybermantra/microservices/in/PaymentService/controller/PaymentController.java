@@ -40,7 +40,7 @@ public class PaymentController {
         if (stripeSignature != null) {
             // Request came from Stripe
             webhookService.handleStripeWebhook(payload, stripeSignature);
-
+            
         } else if (razorpaySignature != null) {
             // Request came from Razorpay
             webhookService.handleRazorpayWebhook(payload, razorpaySignature);

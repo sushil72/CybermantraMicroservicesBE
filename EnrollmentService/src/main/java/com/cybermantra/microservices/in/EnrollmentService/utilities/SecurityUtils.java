@@ -13,7 +13,6 @@ public class SecurityUtils {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated()) {
             Object principal = auth.getPrincipal();
-
             if (principal instanceof String str) {
                 return UUID.fromString(str);  // subject is the UUID string
             }
