@@ -6,9 +6,11 @@ import com.cybermantra.microservices.in.PaymentService.entity.Order;
 import com.cybermantra.microservices.in.PaymentService.entity.Refund;
 import com.cybermantra.microservices.in.PaymentService.enums.OrderStatus;
 import com.cybermantra.microservices.in.PaymentService.enums.RefundStatus;
+import com.cybermantra.microservices.in.PaymentService.events.RefundProcessedEvents;
 import com.cybermantra.microservices.in.PaymentService.exception.AccessDeniedException;
 import com.cybermantra.microservices.in.PaymentService.exception.RefundNotEligibleException;
 import com.cybermantra.microservices.in.PaymentService.exception.RefundNotFoundException;
+import com.cybermantra.microservices.in.PaymentService.kafka.PaymentEventProducer;
 import com.cybermantra.microservices.in.PaymentService.repository.RefundRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,8 @@ public class RefundService {
 
     private final RefundRepository refundRepository;
     private final OrderService orderService;
+    private final PaymentEventProducer eventProducer;
+
 
     private static final int REFUND_WINDOW_DAYS = 30;
 
@@ -75,6 +79,19 @@ public class RefundService {
         refund = refundRepository.save(refund);
         log.info("Refund request {} created for order {}",
                 refund.getId(), order.getOrderNumber());
+        RefundProcessedEvents refundEvent = RefundProcessedEvents.builder()
+                .eventId(UUID.randomUUID().toString())
+                .eventType("REFUND_PROCESSED")
+                .sourceService("payment-service")
+                .timestamp(LocalDateTime.now())
+                .refundId(refund.getId())
+                .orderId(order.getId())
+                .userId(userId)
+                .courseId(order.getCourseId())
+                .refundAmount(request.getRefundAmount())
+                .build();
+
+        eventProducer.publishRefundProcessed(refundEvent);
 
         return mapToResponse(refund);
     }

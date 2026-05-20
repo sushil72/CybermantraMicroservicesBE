@@ -6,13 +6,19 @@ import com.cybermantra.microservices.in.PaymentService.entity.Order;
 import com.cybermantra.microservices.in.PaymentService.entity.Payment;
 import com.cybermantra.microservices.in.PaymentService.enums.OrderStatus;
 import com.cybermantra.microservices.in.PaymentService.enums.PaymentStatus;
+import com.cybermantra.microservices.in.PaymentService.events.PaymentFailedEvents;
+import com.cybermantra.microservices.in.PaymentService.events.PaymentSuccessEvent;
 import com.cybermantra.microservices.in.PaymentService.exception.OrderAlreadyCompletedException;
 import com.cybermantra.microservices.in.PaymentService.exception.PaymentProcessingException;
+import com.cybermantra.microservices.in.PaymentService.kafka.PaymentEventProducer;
 import com.cybermantra.microservices.in.PaymentService.repository.PaymentRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -23,6 +29,7 @@ public class PaymentService {
     private final OrderService orderService;
     private final StripeService stripeService;
     private final RazorpayService razorpayService;
+    private final PaymentEventProducer eventProducer;
 
     @Transactional
     public PaymentResponse processPayment(ProcessPaymentRequest request) {
@@ -78,7 +85,6 @@ public class PaymentService {
             payment.setPaymentMethodDetails(
                     java.util.Map.of("method", request.getPaymentMethod()));
             paymentRepository.save(payment);
-
             // Update order status
             order.setPaymentMethod(request.getPaymentMethod());
             orderService.markOrderCompleted(order.getId());
@@ -87,6 +93,22 @@ public class PaymentService {
                     order.getOrderNumber(), transactionId);
 
             // TODO: Publish PaymentSuccessEvent → Enrollment Service auto-enrolls user
+            PaymentSuccessEvent successEvent = PaymentSuccessEvent.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .eventType("PAYMENT_SUCCESS")
+                    .sourceService("payment-service")
+                    .timestamp(LocalDateTime.now())
+                    .paymentId(payment.getId())
+                    .orderId(order.getId())
+                    .userId(order.getUserId())
+                    .courseId(order.getCourseId())
+                    .amount(order.getFinalAmount())
+                    .currency(order.getCurrency())
+                    .transactionId(transactionId)
+                    .paymentGateway(request.getPaymentGateway().name())
+                    .build();
+
+            eventProducer.publishPaymentSuccess(successEvent);
 
             return mapToResponse(payment);
 
@@ -100,7 +122,19 @@ public class PaymentService {
 
             log.error("Payment failed — order: {}, reason: {}",
                     order.getOrderNumber(), ex.getMessage());
+            PaymentFailedEvents failedEvent = PaymentFailedEvents.builder()
+                    .eventId(UUID.randomUUID().toString())
+                    .eventType("PAYMENT_FAILED")
+                    .sourceService("payment-service")
+                    .timestamp(LocalDateTime.now())
+                    .orderId(order.getId())
+                    .userId(order.getUserId())
+                    .courseId(order.getCourseId())
+                    .reason(ex.getMessage())
+                    .paymentGateway(request.getPaymentGateway().name())
+                    .build();
 
+            eventProducer.publishPaymentFailed(failedEvent);
             throw new PaymentProcessingException(
                     "Payment failed: " + ex.getMessage(), ex);
         }
