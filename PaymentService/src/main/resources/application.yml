@@ -1,3 +1,5 @@
+kind:
+  Application
 spring:
   application:
     name: payment-service
@@ -19,8 +21,8 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME:}
-    password: ${MAIL_PASSWORD:}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -46,11 +48,12 @@ spring:
       properties:
         enable.idempotence: true
         max.in.flight.requests.per.connection: 1
+
 server:
   port: ${SERVER_PORT:8085}
 
 api:
-    baseurl: ${API_BASE_URL:/api/v1/payments}
+  baseurl: ${API_BASE_URL:/api/v1/payments}
 
 jwt:
   public-key-path: ${JWT_PUBLIC_KEY_PATH:classpath:keys/public_key.pem}

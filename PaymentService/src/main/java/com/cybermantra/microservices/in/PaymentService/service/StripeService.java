@@ -3,7 +3,6 @@ package com.cybermantra.microservices.in.PaymentService.service;
 import com.cybermantra.microservices.in.PaymentService.exception.PaymentProcessingException;
 import com.stripe.Stripe;
 import com.stripe.exception.StripeException;
-import com.stripe.model.Charge;
 import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.annotation.PostConstruct;
@@ -19,12 +18,11 @@ public class StripeService {
 
     @Value("${payment.stripe.secret-key}")
     private String secretKey;
-
     @Value("${payment.stripe.webhook-secret}")
     private String webhookSecret;
-
     @PostConstruct
     public void init() {
+        log.debug("Initializing Stripe with secret key: {}", secretKey);
         Stripe.apiKey = secretKey;
     }
 

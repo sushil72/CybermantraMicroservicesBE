@@ -22,6 +22,10 @@ public class EnrollmentService {
 
     private final EnrollmentRepository enrollmentRepository;
 
+    public boolean isAlreadyEnrolled(UUID userId, Long courseId) {
+        return enrollmentRepository.existsByUserIdAndCourseId(userId, courseId);
+    }
+
     @Transactional
     public EnrollmentResponse enroll(UUID userId, EnrollmentRequest request) {
         UUID targetUserId = request.getTargetUserId() != null ? request.getTargetUserId() : userId;
@@ -99,5 +103,19 @@ public class EnrollmentService {
                 .lastAccessedAt(enrollment.getLastAccessedAt())
                 .hasCertificate(enrollment.getCertificate() != null)
                 .build();
+    }
+    // Called after refund processed event received
+    @Transactional
+    public void unenrollAfterRefund(UUID userId, Long courseId) {
+        enrollmentRepository.findByUserIdAndCourseId(userId, courseId)
+                .ifPresentOrElse(
+                        enrollment -> {
+                            enrollmentRepository.delete(enrollment);
+                            log.info("✅ Enrollment cancelled via refund event — userId: {}, courseId: {}",
+                                    userId, courseId);
+                        },
+                        () -> log.warn("No enrollment found for userId: {}, courseId: {} — skipping",
+                                userId, courseId)
+                );
     }
 }
