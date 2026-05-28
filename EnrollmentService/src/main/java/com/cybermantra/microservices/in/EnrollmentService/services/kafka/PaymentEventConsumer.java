@@ -4,6 +4,7 @@ package com.cybermantra.microservices.in.EnrollmentService.services.kafka;
 import com.cybermantra.microservices.in.EnrollmentService.events.PaymentSuccessEvent;
 import com.cybermantra.microservices.in.EnrollmentService.events.RefundProcessedEvent;
 import com.cybermantra.microservices.in.EnrollmentService.services.EnrollmentService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -11,12 +12,15 @@ import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class PaymentEventConsumer {
 
     private final EnrollmentService enrollmentService;
+    private final ObjectMapper objectMapper;
 
     @KafkaListener(
             topics = "payment-events",
@@ -27,65 +31,57 @@ public class PaymentEventConsumer {
             ConsumerRecord<String, Object> record,
             Acknowledgment acknowledgment) {
 
-        log.info("📨 Kafka event received from topic: payment-events");
-        log.info("📦 Partition: {}, Offset: {}, Key: {}",
-                record.partition(),
-                record.offset(),
-                record.key());
+        log.info("📨 Received event — partition: {}, offset: {}, key: {}",
+                record.partition(), record.offset(), record.key());
 
         try {
+            // Deserialize as Map to read eventType first
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = (Map<String, Object>) record.value();
 
-            Object payload = record.value();
+            String eventType = (String) payload.get("eventType");
+            log.info("🔔 Event type: {}", eventType);
 
-            log.info("🔍 Payload type received: {}",
-                    payload.getClass().getSimpleName());
+            switch (eventType) {
 
-            // PAYMENT SUCCESS
-            if (payload instanceof PaymentSuccessEvent event) {
+                case "PAYMENT_SUCCESS" -> {
+                    PaymentSuccessEvent event = objectMapper
+                            .convertValue(payload, PaymentSuccessEvent.class);
+                    log.info("✅ Processing PAYMENT_SUCCESS — userId: {}, courseId: {}",
+                            event.getUserId(), event.getCourseId());
+                    handlePaymentSuccess(event);
+                }
 
-                log.info("💰 PAYMENT SUCCESS EVENT RECEIVED");
-                log.info("👤 User ID: {}", event.getUserId());
-                log.info("📚 Course ID: {}", event.getCourseId());
+                case "PAYMENT_FAILED" -> {
+                    // ✅ Log it but DO NOT enroll
+                    log.warn("⚠️ PAYMENT_FAILED event received — " +
+                                    "userId: {}, courseId: {} — skipping enrollment",
+                            payload.get("userId"), payload.get("courseId"));
+                }
 
-                handlePaymentSuccess(event);
+                case "REFUND_PROCESSED" -> {
+                    RefundProcessedEvent event = objectMapper
+                            .convertValue(payload, RefundProcessedEvent.class);
+                    log.info("🔄 Processing REFUND_PROCESSED — userId: {}, courseId: {}",
+                            event.getUserId(), event.getCourseId());
+                    handleRefundProcessed(event);
+                }
 
-                log.info("✅ Enrollment created successfully");
-
+                default -> log.warn("⚠️ Unknown eventType: {} — ignoring", eventType);
             }
 
-            // REFUND
-            else if (payload instanceof RefundProcessedEvent event) {
-
-                log.info("💸 REFUND EVENT RECEIVED");
-                log.info("👤 User ID: {}", event.getUserId());
-                log.info("📚 Course ID: {}", event.getCourseId());
-
-                handleRefundProcessed(event);
-
-                log.info("🗑️ Enrollment removed after refund");
-            }
-
-            else {
-                log.warn("⚠️ Unknown event received");
-            }
-
+            // Commit offset only after successful processing
             acknowledgment.acknowledge();
-
-            log.info("✅ Kafka offset acknowledged successfully");
+            log.info("✅ Offset {} acknowledged", record.offset());
 
         } catch (Exception ex) {
-
-            log.error("❌ Error processing Kafka event");
-            log.error("🔥 Exception Message: {}", ex.getMessage(), ex);
-
-            log.warn("🔁 Kafka will retry this event");
+            log.error("❌ Failed to process event at offset: {} — error: {}",
+                    record.offset(), ex.getMessage());
+            // Do NOT acknowledge — Kafka will redeliver
         }
     }
 
     private void handlePaymentSuccess(PaymentSuccessEvent event) {
-
-        log.info("🚀 Starting enrollment process...");
-
         enrollmentService.createEnrollmentAfterPayment(
                 event.getUserId(),
                 event.getCourseId()
@@ -93,9 +89,6 @@ public class PaymentEventConsumer {
     }
 
     private void handleRefundProcessed(RefundProcessedEvent event) {
-
-        log.info("🚀 Starting unenrollment process after refund...");
-
         enrollmentService.unenrollAfterRefund(
                 event.getUserId(),
                 event.getCourseId()
