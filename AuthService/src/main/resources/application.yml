@@ -2,4 +2,4 @@ spring:
   application:
     name: AuthService
   profiles:
-    active: dev
+    active: prod
