@@ -20,6 +20,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import static com.cybermantra.microservices.in.PaymentService.enums.PaymentGateway.RAZORPAY;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -39,6 +41,18 @@ public class PaymentService {
         // Prevent double payment
         if (order.getStatus() == OrderStatus.COMPLETED) {
             throw new OrderAlreadyCompletedException(order.getId());
+        }
+        if (request.getPaymentGateway() == RAZORPAY) {
+            if (request.getRazorpayOrderId() == null
+                    || request.getRazorpayOrderId().isBlank()) {
+                throw new PaymentProcessingException(
+                        "razorpayOrderId is required for Razorpay payments");
+            }
+            if (request.getRazorpaySignature() == null
+                    || request.getRazorpaySignature().isBlank()) {
+                throw new PaymentProcessingException(
+                        "razorpaySignature is required for Razorpay payments");
+            }
         }
 
         // Create payment record with PENDING status

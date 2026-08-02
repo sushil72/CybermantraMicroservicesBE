@@ -6,6 +6,7 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.annotation.PostConstruct;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -18,6 +19,7 @@ public class StripeService {
 
     @Value("${payment.stripe.secret-key}")
     private String secretKey;
+    @Getter
     @Value("${payment.stripe.webhook-secret}")
     private String webhookSecret;
     @PostConstruct
@@ -61,7 +63,4 @@ public class StripeService {
         }
     }
 
-    public String getWebhookSecret() {
-        return webhookSecret;
-    }
 }

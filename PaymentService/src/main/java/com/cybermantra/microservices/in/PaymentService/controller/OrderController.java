@@ -28,9 +28,8 @@ public class OrderController {
     @Operation(summary = "Create a new order", description = "Creates an order before payment is processed. Applies coupon if provided.")
     public ResponseEntity<ApiResponse<OrderResponse>> createOrder(
             @Valid @RequestBody CreateOrderRequest request) {
-        System.out.println("order request received:" + request);
+        System.out.println("order request received:" + request.toString());
         UUID userId = SecurityUtils.getCurrentUserId();
-
         OrderResponse orderResponse = orderService.createOrder(userId, request);
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success("Order created successfully", orderResponse));
