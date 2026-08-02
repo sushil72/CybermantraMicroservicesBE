@@ -3,14 +3,11 @@ name: Build AuthService
 on:
   push:
     branches:
-      - main
-      - develop
+      - sushil
 
   pull_request:
     branches:
-      - main
-      - develop
-
+      - sushil
 jobs:
   build:
 
